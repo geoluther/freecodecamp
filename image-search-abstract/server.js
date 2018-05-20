@@ -7,12 +7,10 @@ const bodyParser = require('body-parser')
 const nunjucks = require('nunjucks')
 const moment = require('moment');
 const mongodb = require('mongodb');
-const expressMongoDb = require('express-mongo-db');
 
 var app = express()
 
 var url = process.env.MONGOLAB_URI;
-app.use(expressMongoDb(url));
 
 nunjucks.configure('views', {
     autoescape: true,
@@ -36,57 +34,59 @@ app.get('/nuns', (req, res) =>  {
   res.render(__dirname + '/views/nuns.njk', {foo: 'bar'} )
 });
 
-
-// url shortener microservice
-// get new url shortcut
-app.get('/new/(*)', (req, res) =>  {
-  const url = req.params[0]
-  const re = /^https?\:\/\/[\-_\w\.]?[\w\\-_]+.[\w\\_\-:]+/
-  const validurl = re.exec(url)
-  if (validurl) {
-    const shortString = randomString(5)
-    const shortURL = "https://panoramic-printer.glitch.me/short/" + shortString
-    const db = req.db
-    const data = { "original_url": url, "short_url": shortString}
-    db.collection('urls').insertOne(data, (err, result) => {
+// image search abstraction layer
+// todo: add search query to db - just query, not results
+app.get('/img/:search', (req, res, next) => {
+  const searchterms = req.params.search
+  let offset = req.query.offset || 10
+  //url, snippet, thumbnail, context
+  googleImgClient.search(searchterms, {page: offset})
+    .then(images => {
+    // const db = req.db
+    const data = { "terms": searchterms, "date": new Date()}
+    db.collection('search_terms').insertOne(data, (err, result) => {
       if (err) { throw err }
     });
-    res.json({"original_url": url, "short_url": shortURL})
-  }
 
-  res.json({error: 'invalid url'})
-});
-
-// this blueprint for mongodb connections
-app.get('/short/:url', function (req, res) {
-  const url = req.params.url
-    var db = req.db
-  const data = {'short_url': url}
-  db.collection('urls').findOne(data, (err, result) => {
-    if (err) {
-      return console.log(err)
-    }
-    if (result) {
-      res.redirect(result.original_url)
-    }
-    else {
-      res.json({error: 'invalid short url'})
-    }
+    res.json(images)
+    // console.log(images)
   })
+  .catch( err => {
+    console.log(err)
+    res.json({error: "something went wrong"})
+  });
+
 });
 
 
-// listen for requests :)
-var listener = app.listen(process.env.PORT, function () {
-  console.log('Your app is listening on port ' + listener.address().port);
+app.get('/recent', (req, res, next) => {
+  console.log('connected to recent')
+
+  const collection = db.collection('search_terms')
+
+  collection.find({}).sort({ date: -1}).project({'_id': 0}).limit(10).toArray(function(err, docs) {
+    // assert.equal(err, null);
+    console.log("Found the following records");
+    res.json(docs)
+  });
+  // res.json({'recent': 'results'})
 });
 
 
-function randomString(length) {
-  let text = "";
-  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  for(let i = 0; i < length; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
+// connect to mongodb and start the server
+MongoClient.connect(dburi, function (err, client) {
+  if (err) {
+    console.log('Unable to connect to the mongoDB server. Error:', err);
+  } else {
+    console.log('Connection established to mongodb');
+    // do some work here with the database.
+    // listen for requests :)
+    db = client.db()
+    var listener = app.listen(process.env.PORT, function () {
+      console.log('Your app is listening on port ' + listener.address().port);
+    });
+    //Close connection
+    // db.close();
   }
-  return text;
-}
+});
+
