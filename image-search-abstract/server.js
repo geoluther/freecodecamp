@@ -34,8 +34,8 @@ app.get('/nuns', (req, res) =>  {
   res.render(__dirname + '/views/nuns.njk', {foo: 'bar'} )
 });
 
+
 // image search abstraction layer
-// todo: add search query to db - just query, not results
 app.get('/img/:search', (req, res, next) => {
   const searchterms = req.params.search
   let offset = req.query.offset || 10
@@ -58,7 +58,7 @@ app.get('/img/:search', (req, res, next) => {
 
 });
 
-
+// show recent queries
 app.get('/recent', (req, res, next) => {
   console.log('connected to recent')
 
