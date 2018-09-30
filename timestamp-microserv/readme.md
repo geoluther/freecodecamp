@@ -1,2 +1,0 @@
-
-# fcc timestamp microservice
